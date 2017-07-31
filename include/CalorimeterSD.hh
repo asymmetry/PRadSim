@@ -66,9 +66,10 @@ protected:
 
     CalorimeterHitsCollection *fCalorHitsCollection;
 
+    int HitNumber;
     double fTotalEdep;
-    double fModuleEdep[NModules];
-    double fModuleTrackL[NModules];
+    double fModuleEdep[MaxNHits][NModules];
+    double fModuleTrackL[MaxNHits][NModules];
 };
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......

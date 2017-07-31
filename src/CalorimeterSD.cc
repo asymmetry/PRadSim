@@ -66,9 +66,11 @@ CalorimeterSD::CalorimeterSD(G4String name, G4String abbrev) : StandardDetectorS
 
     fTotalEdep = 0;
 
-    for (int i = 0; i < NModules; i++) {
-        fModuleEdep[i] = 1e+38;
-        fModuleTrackL[i] = 1e+38;
+    for (int i = 0; i < MaxNHits; i++) {
+        for (int j = 0; j < NModules; j++) {
+            fModuleEdep[i][j] = 0.0;
+            fModuleTrackL[i][j] = 0.0;
+        }
     }
 }
 
@@ -163,6 +165,13 @@ G4bool CalorimeterSD::ProcessHits(G4Step *aStep, G4TouchableHistory *)
                 aHit->SetOutPos(OutPos);
                 aHit->SetOutMom(OutMom);
             }
+            
+            int OldHitNumber = aHit->GetCopyNo();
+            
+            if (OldHitNumber < MaxNHits) {
+                fModuleEdep[OldHitNumber][CopyNo] += Edep;
+                fModuleTrackL[OldHitNumber][CopyNo] += StepLength;
+            }
         } else {
             // create a new hit
             aHit = new StandardHit();
@@ -178,9 +187,16 @@ G4bool CalorimeterSD::ProcessHits(G4Step *aStep, G4TouchableHistory *)
             aHit->SetEdep(Edep);
             aHit->SetTrackLength(StepLength);
             aHit->SetPhysV(thePhysVol);
-            aHit->SetCopyNo(CopyNo);
+            aHit->SetCopyNo(HitNumber);
 
             fHitsCollection->insert(aHit);
+            
+            if (HitNumber < MaxNHits) {
+                fModuleEdep[HitNumber][CopyNo] += Edep;
+                fModuleTrackL[HitNumber][CopyNo] += StepLength;
+            }
+            
+            HitNumber++;
         }
 
         CalorimeterHit *aCalorHit = (*fCalorHitsCollection)[CopyNo];
@@ -242,9 +258,17 @@ void CalorimeterSD::EndOfEvent(G4HCofThisEvent *HCE)
     for (int i = 0; i < NModules; i++) {
         CalorimeterHit *aCalorHit = (*fCalorHitsCollection)[i];
 
-        fModuleEdep[i] = aCalorHit->GetEdep();
-        fModuleTrackL[i] = aCalorHit->GetTrackLength();
-        fTotalEdep += fModuleEdep[i];
+        double SumEdep = 0, SumTrackL = 0;
+        
+        for (int j = 0; j < MaxNHits; j++) {
+            SumEdep += fModuleEdep[j][i];
+            SumTrackL += fModuleTrackL[j][i];
+        }
+        
+        if ((aCalorHit->GetEdep() - SumEdep > 1e-8)||(aCalorHit->GetTrackLength() - SumTrackL > 1e-8))
+            G4cout << "WARNING"<< G4endl;
+        
+        fTotalEdep += SumEdep;
     }
 }
 
@@ -257,8 +281,8 @@ void CalorimeterSD::Register(TTree *tree)
     const char *abbr = fAbbrev.data();
 
     tree->Branch(Form("%s.TotalEdep", abbr), &fTotalEdep, Form("%s.TotalEdep/D", abbr));
-    tree->Branch(Form("%s.ModuleEdep", abbr), fModuleEdep, Form("%s.ModuleEdep[%d]/D", abbr, NModules));
-    tree->Branch(Form("%s.ModuleTrackL", abbr), fModuleTrackL, Form("%s.ModuleTrackL[%d]/D", abbr, NModules));
+    tree->Branch(Form("%s.ModuleEdep", abbr), fModuleEdep, Form("%s.ModuleEdep[%d][%d]/D", abbr, MaxNHits, NModules));
+    tree->Branch(Form("%s.ModuleTrackL", abbr), fModuleTrackL, Form("%s.ModuleTrackL[%d][%d]/D", abbr, MaxNHits, NModules));
 }
 
 //....oooOO0OOooo........oooOO0OOooo........oooOO0OOooo........oooOO0OOooo......
@@ -267,11 +291,14 @@ void CalorimeterSD::Clear()
 {
     StandardDetectorSD::Clear();
 
+    HitNumber = 0;
     fTotalEdep = 0;
 
-    for (int i = 0; i < NModules; i++) {
-        fModuleEdep[i] = 1e+38;
-        fModuleTrackL[i] = 1e+38;
+    for (int i = 0; i < MaxNHits; i++) {
+        for (int j = 0; j < NModules; j++) {
+            fModuleEdep[i][j] = 0;
+            fModuleTrackL[i][j] = 0;
+        }
     }
 }
 
